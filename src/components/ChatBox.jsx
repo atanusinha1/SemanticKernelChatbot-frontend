@@ -1,17 +1,24 @@
-// File: src/components/ChatBox.jsx
-// This is the main chat component that displays messages and handles user input
+// File: src/components/ChatBox.jsx (Updated)
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './ChatBox.css';
 
 const ChatBox = () => {
-  // ===== STATE MANAGEMENT =====
+  // ===== NEW STATE FOR CONVERSATION MEMORY =====
+  const [conversationId] = useState(() => {
+    // Generate unique ID for this conversation
+    const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Save to localStorage to persist across page reloads
+    localStorage.setItem('lastConversationId', id);
+    return id;
+  });
+
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'bot',
-      text: 'Hello! 👋 I\'m your AI assistant. How can I help you today?',
+      text: 'Hello! 👋 I\'m your AI assistant. I can now remember our conversation. Try telling me something and then asking about it later!',
       timestamp: new Date(),
     },
   ]);
@@ -19,19 +26,16 @@ const ChatBox = () => {
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [messageCount, setMessageCount] = useState(1); // NEW: Track message count
   const messagesEndRef = useRef(null);
 
-  // ===== CONSTANTS =====
-  // Point this to your backend API
   const API_BASE_URL = 'http://localhost:5190/api';
 
-  // ===== EFFECTS =====
-  // Scroll to bottom whenever messages change
+  // Scroll to bottom
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // ===== HELPER FUNCTIONS =====
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -46,54 +50,46 @@ const ChatBox = () => {
     setMessages((prevMessages) => [...prevMessages, newMessage]);
   };
 
-  // ===== MAIN CHAT FUNCTION =====
   const handleSendMessage = async () => {
-    // Validate input
     if (!inputValue.trim()) {
       setError('Please enter a message');
       return;
     }
 
-    // Reset error state
     setError(null);
-
-    // Add user message to chat
     addMessage(inputValue, 'user');
 
-    // Store the message and clear input
     const userMessage = inputValue;
     setInputValue('');
     setLoading(true);
 
     try {
-      console.log('📤 Sending message to backend:', userMessage);
+      console.log('📤 Sending message to conversation:', conversationId);
 
-      // ===== API CALL =====
-      // Send message to backend
+      // ===== SEND WITH CONVERSATION ID =====
       const response = await axios.post(`${API_BASE_URL}/chat`, {
         message: userMessage,
+        conversationId: conversationId, // NEW: Send conversation ID
       });
 
-      // Extract AI response
       const aiResponse = response.data.response;
-      console.log('📥 Received response from backend:', aiResponse);
+      const newMessageCount = response.data.messageCount; // NEW: Get message count
 
-      // Add AI response to chat
+      console.log('📥 Received response:', aiResponse);
+      console.log('📊 Conversation has', newMessageCount, 'messages');
+
       addMessage(aiResponse, 'bot');
+      setMessageCount(newMessageCount); // NEW: Update message count
     } catch (err) {
       console.error('❌ Error:', err);
 
-      // Determine error message
-      let errorMessage = 'Unable to get response. Please try again.';
-
+      let errorMessage = 'Unable to get response';
       if (err.response?.status === 503) {
-        errorMessage = '⚠️ AI service is unavailable. Check your Azure OpenAI credentials.';
+        errorMessage = '⚠️ AI service is unavailable';
       } else if (err.response?.status === 400) {
-        errorMessage = '⚠️ Bad request. Please check your input.';
+        errorMessage = '⚠️ Bad request';
       } else if (err.code === 'ERR_NETWORK') {
-        errorMessage = '❌ Network error. Is the backend running on port 5000?';
-      } else if (err.response?.data?.error) {
-        errorMessage = `❌ Error: ${err.response.data.error}`;
+        errorMessage = '❌ Network error - backend not running?';
       }
 
       setError(errorMessage);
@@ -103,25 +99,26 @@ const ChatBox = () => {
     }
   };
 
-  // ===== EVENT HANDLERS =====
   const handleKeyPress = (e) => {
-    // Send message on Enter key (but not on Shift+Enter for multiline)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
 
-  // ===== RENDER =====
   return (
     <div className="chat-container">
       {/* Header */}
       <div className="chat-header">
         <h1>🤖 SemanticKernel ChatBot</h1>
-        <p className="subtitle">Powered by Azure OpenAI</p>
+        <p className="subtitle">
+          Powered by Azure OpenAI | 💾 Conversation Memory Enabled
+        </p>
+        {/* NEW: Show message count */}
+        <p className="message-count">Messages in conversation: {messageCount}</p>
       </div>
 
-      {/* Messages Display Area */}
+      {/* Messages */}
       <div className="chat-messages">
         {messages.map((message) => (
           <div key={message.id} className={`message message-${message.type}`}>
@@ -137,7 +134,6 @@ const ChatBox = () => {
           </div>
         ))}
 
-        {/* Loading Indicator */}
         {loading && (
           <div className="message message-bot">
             <div className="message-content">
@@ -150,24 +146,20 @@ const ChatBox = () => {
           </div>
         )}
 
-        {/* Scroll target */}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
         <div className="error-banner">
           {error}
-          <button
-            className="error-close"
-            onClick={() => setError(null)}
-          >
+          <button className="error-close" onClick={() => setError(null)}>
             ✕
           </button>
         </div>
       )}
 
-      {/* Input Area */}
+      {/* Input */}
       <div className="chat-input-area">
         <div className="input-wrapper">
           <textarea
@@ -175,7 +167,7 @@ const ChatBox = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+            placeholder="Type your message here... (Press Enter to send)"
             disabled={loading}
             rows="3"
           />
@@ -183,17 +175,19 @@ const ChatBox = () => {
             className="send-button"
             onClick={handleSendMessage}
             disabled={loading || !inputValue.trim()}
-            title="Send message"
           >
             {loading ? '⏳ Sending...' : '➤ Send'}
           </button>
         </div>
 
-        {/* Info Footer */}
+        {/* NEW: Display conversation ID */}
         <div className="chat-footer">
           <p>
-            💡 Tip: This chatbot uses Semantic Kernel + Azure OpenAI. Your messages are sent to
-            the backend API.
+            💡 This chatbot now remembers our conversation! Try telling me something, 
+            then asking about it later.
+          </p>
+          <p className="conversation-info">
+            💾 Conversation ID: <code>{conversationId.substring(0, 20)}...</code>
           </p>
           <p className="api-status">
             Backend: <span className="status-indicator">●</span>
