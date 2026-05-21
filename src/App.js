@@ -1,23 +1,14 @@
-import logo from './logo.svg';
+// File: src/App.js
+// Main application component that renders the ChatBox
+
+import React from 'react';
+import ChatBox from './components/ChatBox';
 import './App.css';
 
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <ChatBox />
     </div>
   );
 }
